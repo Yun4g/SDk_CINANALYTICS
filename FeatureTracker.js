@@ -2,7 +2,7 @@
     'use strict';
 
     const script = document.getElementById("featureTrackSDK");
-    const project_key = script?.getAttribute('projKey');
+    const project_key = script?.getAttribute('data-proj-key');
     const customEndpoint = script?.getAttribute('data-endpoint');
 
     const ENDPOINT = customEndpoint || 'https://cinanalytics-backend.onrender.com/api';
