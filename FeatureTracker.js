@@ -15,14 +15,18 @@
     const projectName = window.document.title;
 
     let init = false;
-
+   const projectKey = project_key || localStorage.getItem('_vnow_project_key');
+    if (!projectKey) {
+        console.error('[FeatureTracker] Error: project_key is required. Please add it as a data attribute to the script tag.');
+        return;
+    }   
     async function VerifySdk() {
         if (init) return;
         try {
             const response = await fetch(`${ENDPOINT}/project/verify-project`, {
                 method: "POST",
                 headers: { "Content-type": "application/json" },
-                body: JSON.stringify({ project_key, projectIcon: icon, projectName }),
+                body: JSON.stringify({ projectKey, projectIcon: icon, projectName }),
                 credentials: "include"
             });
 
