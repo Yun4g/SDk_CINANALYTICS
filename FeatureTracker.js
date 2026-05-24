@@ -15,11 +15,11 @@
     const projectName = window.document.title;
 
     let init = false;
-   const projectKey = project_key || localStorage.getItem('_vnow_project_key');
+    const projectKey = project_key || localStorage.getItem('_vnow_project_key');
     if (!projectKey) {
         console.error('[FeatureTracker] Error: project_key is required. Please add it as a data attribute to the script tag.');
         return;
-    }   
+    }
     async function VerifySdk() {
         if (init) return;
         try {
@@ -53,7 +53,9 @@
     let visitorId = localStorage.getItem('_vnow_vid');
     if (!visitorId) { visitorId = uid(); localStorage.setItem('_vnow_vid', visitorId); }
 
+  
     const sessionId = sessionStorage.getItem('_vnow_sid') || uid();
+
     sessionStorage.setItem('_vnow_sid', sessionId);
     const sessionStart = Date.now();
 
@@ -116,7 +118,9 @@
 
     function push(type, data = {}) {
         const event = {
-            projectKey, visitorId, sessionId, type,
+            project_key,                   
+            visitor_id: visitorId,         
+            session_id: sessionId, type,
             url: location.href,
             path: location.pathname,
             title: document.title,
@@ -132,7 +136,7 @@
     function flush() {
         if (!queue.length) return;
         const batch = queue.splice(0);
-        const payload = JSON.stringify({ events: batch });
+        const payload = JSON.stringify({ eventData: batch });
         if (nav.sendBeacon) {
             nav.sendBeacon(`${ENDPOINT}/events`, new Blob([payload], { type: 'application/json' }));
         } else {
@@ -297,7 +301,7 @@
             container_classes: container?.className || null,
 
             tag: el.tagName.toLowerCase(),
-            element_id: el.id || null,       
+            element_id: el.id || null,
             classes: el.className || null,
             href: el.getAttribute('href') || null,
         };
@@ -309,11 +313,11 @@
         const handlerName = getRingHandlerName(el);
 
         // Priority 1: a11y label + handler
-        if (context.ariaLabel && handlerName) return `${context.ariaLabel} – ${handlerName}`;
-        if (context.ariaLabel) return context.ariaLabel;
+        if (context.aria_label && handlerName) return `${context.aria_label} – ${handlerName}`;
+        if (context.aria_label) return context.aria_label;
 
         // Priority 2: visible text + handler
-        const text = context.innerText;
+        const text = context.inner_text
         if (text && handlerName) return `${text} – ${handlerName}`;
         if (text) return text;
 
