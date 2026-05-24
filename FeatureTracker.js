@@ -130,9 +130,9 @@
         const batch = queue.splice(0);
         const payload = JSON.stringify({ events: batch });
         if (nav.sendBeacon) {
-            nav.sendBeacon(ENDPOINT, new Blob([payload], { type: 'application/json' }));
+            nav.sendBeacon(`${ENDPOINT}/events`, new Blob([payload], { type: 'application/json' }));
         } else {
-            fetch(ENDPOINT, {
+            fetch(`${ENDPOINT}/events`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: payload,
