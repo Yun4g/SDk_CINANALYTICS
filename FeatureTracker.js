@@ -116,7 +116,7 @@
 
     function push(type, data = {}) {
         const event = {
-            project_key, visitorId, sessionId, type,
+            projectKey, visitorId, sessionId, type,
             url: location.href,
             path: location.pathname,
             title: document.title,
@@ -240,7 +240,7 @@
     // Sent to backend so it can group events under one feature identity.
     function getFeatureKey(fingerprint, path) {
         if (!fingerprint) return null;
-        const raw = `${project_key}|${path}|${fingerprint}`;
+        const raw = `${projectKey}|${path}|${fingerprint}`;
         // djb2 hash — fast, no crypto needed
         let hash = 5381;
         for (let i = 0; i < raw.length; i++) {
