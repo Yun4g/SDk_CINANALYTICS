@@ -347,33 +347,42 @@ async function captureLocation() {
 
     // 
     function getMeaningfulText(el) {
-        const label = getA11yLabel(el);
-        if (label) return label;
 
-        const text = el.textContent?.trim()
-            .replace(/[ --	-]/g, '')
-            .replace(/[ -]/g, '')
-            .replace(/\s+/g, ' ')
-            .trim()
-            .slice(0, 100);
-        if (text) return text;
+    const label = getA11yLabel(el);
+    if (label) return label;
 
-        const title = el.getAttribute('title');
-        if (title) return title;
+    const text = el.textContent?.trim()
+        .replace(/[\u{1F300}-\u{1FFFF}]/gu, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 100);
+    if (text) return text;
 
-        const dataLabel = el.getAttribute('data-track') || el.getAttribute('data-feature');
-        if (dataLabel) return dataLabel;
+  
+    const dataLabel = el.getAttribute('data-track') || el.getAttribute('data-feature');
+    if (dataLabel) return dataLabel;
 
-        if (el.tagName.toLowerCase() === 'button') {
-            const svg = el.querySelector('svg');
-            if (svg) return 'button click';
-            return 'button click';
+   
+    if (el.tagName.toLowerCase() === 'button') {
+        const svg = el.querySelector('svg');
+        if (svg) {
+            const svgTitle = svg.querySelector('title')?.textContent?.trim();
+            if (svgTitle) return svgTitle;
+
+            const ariaLabel = svg.getAttribute('aria-label');
+            if (ariaLabel) return ariaLabel;
+
+           
+            const siblingText = el.closest('[class]')?.querySelector('span, p, h1, h2, h3, label')?.textContent?.trim();
+            if (siblingText) return `${siblingText} button`;
         }
-
-        if (el.tagName.toLowerCase() === 'a') return 'link click';
-
-        return null;
+        return null; 
     }
+
+    if (el.tagName.toLowerCase() === 'a') return null;
+
+    return null;
+}
 
     function resolveFeatureName(el, context) {
         const handlerName = getRingHandlerName(el);
