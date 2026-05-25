@@ -155,19 +155,56 @@
     });
 
     //  Geolocation 
-    function captureLocation() {
+    // Replace your current captureLocation() with this:
+async function captureLocation() {
+    try {
+  
+        const ipRes = await fetch('http://ip-api.com/json');
+        const ipData = await ipRes.json();
+
+        if (ipData.status === 'success') {
+            push('location', {
+                country: ipData.country,
+                country_code: ipData.countryCode,
+                city: ipData.city,
+                region: ipData.regionName,
+                isp: ipData.isp,
+                source: 'ip',
+            });
+        }
+
+        
         if (!nav.geolocation) return;
         nav.geolocation.getCurrentPosition(
-            pos => push('location', {
-                lat: pos.coords.latitude,
-                lng: pos.coords.longitude,
-                accuracy: pos.coords.accuracy,
-                source: 'gps',
-            }),
-            () => { },
+            async (pos) => {
+                const lat = pos.coords.latitude;
+                const lng = pos.coords.longitude;
+
+              
+                const geoRes = await fetch(
+                    `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`
+                );
+                const geoData = await geoRes.json();
+
+                push('location', {
+                    lat,
+                    lng,
+                    accuracy: pos.coords.accuracy,
+                    country: geoData.countryName,
+                    country_code: geoData.countryCode,
+                    city: geoData.city,
+                    region: geoData.principalSubdivision,
+                    source: 'gps',
+                });
+            },
+            () => { }, // silently fail if user denies GPS
             { timeout: 5000, maximumAge: 60000 }
         );
+
+    } catch (err) {
+        // Location is non-critical — never crash the SDK over it
     }
+}
     captureLocation();
 
     // Page View 
