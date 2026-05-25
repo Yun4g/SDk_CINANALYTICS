@@ -385,6 +385,23 @@ async function captureLocation() {
                         handler.name !== 'bound ' && handler.name !== 'onClick') {
                         return camelToWords(handler.name);
                     }
+                    if (typeof handler === 'function') {
+                        const eventKey = props.onClick ? 'click' :
+                            props.onMouseDown ? 'mouse down' :
+                            props.onPointerDown ? 'pointer down' :
+                            'click';
+                        const descriptor = getA11yLabel(el) || el.textContent?.trim().slice(0, 100) || el.id || el.tagName.toLowerCase();
+                        const cleanDescriptor = descriptor?.replace(/\s+/g, ' ').trim();
+
+                        if (fiber.type?.displayName || fiber.type?.name) {
+                            const comp = fiber.type.displayName || fiber.type.name;
+                            if (comp && comp !== 'div' && comp !== 'span') {
+                                return `${eventKey} handler for ${cleanDescriptor} in ${comp}`;
+                            }
+                        }
+
+                        return `${eventKey} handler for ${cleanDescriptor}`;
+                    }
                     if (fiber.type?.displayName || fiber.type?.name) {
                         const comp = fiber.type.displayName || fiber.type.name;
                         if (comp && comp !== 'div' && comp !== 'span' && props.onClick?.name) {
@@ -458,40 +475,102 @@ async function captureLocation() {
             .trim();
     }
 
-
-    // ─── Click Tracking 
-document.addEventListener('click', function (e) {
-
-
-    const el = e.target.closest(
-        '[data-track],' +          
-        'button,' +                
-        '[role="button"],' +      
-        'input[type="button"],' +  
-        'input[type="submit"]'    
-     
-    );
-
-    if (!el) return;
+    function isNavigationClick(el) {
 
   
-    const href = el.getAttribute('href') || el.closest('a')?.getAttribute('href');
-    if (href && !href.startsWith('#') && !href.startsWith('javascript')) return;
+    const href = el.getAttribute('href');
+    if (href && !href.startsWith('#') && !href.startsWith('javascript')) return true;
 
-    const context = getElementContext(el);
-    const feature_name = resolveFeatureName(el, context);
+  
+    const parentAnchor = el.closest('a');
+    if (parentAnchor) {
+        const parentHref = parentAnchor.getAttribute('href');
+        if (parentHref && !parentHref.startsWith('#') && !parentHref.startsWith('javascript')) return true;
+    }
 
-    if (!feature_name && !context.feature_key) return;
 
-    push('feature_click', {
-        ...context,
-        feature_name,
-    });
+    const fiberKey = Object.keys(el).find(k =>
+        k.startsWith('__reactFiber') || k.startsWith('__reactInternalInstance')
+    );
+    if (fiberKey) {
+        let fiber = el[fiberKey];
+        while (fiber) {
+            const props = fiber.memoizedProps || fiber.pendingProps;
+            if (props?.onClick && typeof props.onClick === 'function') {
+                const fnStr = props.onClick.toString();
+                // Check if the function body contains navigation calls
+                if (
+                    /navigate\s*\(/.test(fnStr) ||        // React Router navigate()
+                    /router\.push\s*\(/.test(fnStr) ||    // Next.js router.push()
+                    /router\.replace\s*\(/.test(fnStr) || // Next.js router.replace()
+                    /history\.push\s*\(/.test(fnStr) ||   // React Router v5
+                    /history\.replace\s*\(/.test(fnStr) ||
+                    /useNavigate/.test(fnStr) ||
+                    /\$router\.push/.test(fnStr) ||        // Vue Router
+                    /\$router\.replace/.test(fnStr) ||
+                    /this\.router\.navigate/.test(fnStr)   // Angular Router
+                ) return true;
+            }
+            fiber = fiber.return;
+        }
+    }
+
+  
+    const vue = el.__vueParentComponent;
+    if (vue) {
+        const vnodeProps = vue.vnode?.props || {};
+        const handler = vnodeProps.onClick;
+        if (typeof handler === 'function') {
+            const fnStr = handler.toString();
+            if (/\$router\.(push|replace|go)/.test(fnStr) ||
+                /router\.(push|replace|go)/.test(fnStr)) return true;
+        }
+    }
+
+    if (el.getAttribute('data-navigate') || el.getAttribute('data-route')) return true;
+
+    return false;
+}
+    //  Click Tracking 
+document.addEventListener('click', function (e) {
+
+    //  Always find the real interactive element 
+    // Click target might be svg, path, img, span insde a button
+    // closest() walks up the DOM to find the actual button
+    const el = e.target.closest(
+        '[data-track],' +
+        'button,' +
+        '[role="button"],' +
+        'input[type="button"],' +
+        'input[type="submit"]'
+    );
+
+
+    if (!el) return;
+    if (isNavigationClick(el)) return;
+
+    const urlBefore = location.href;
+
+    setTimeout(() => {
+        // URL changed or navigation click, discard
+        if (location.href !== urlBefore) return;
+
+        const context = getElementContext(el);
+        const feature_name = getMeaningfulText(el) || resolveFeatureName(el, context);
+
+        if (!feature_name && !context.feature_key) return;
+
+        push('feature_click', {
+            ...context,
+            feature_name,
+        });
+
+    }, 150);
 
 }, true);
 
 
-    // ─── Input Tracking 
+    //  Input Tracking 
     document.addEventListener('input', (e) => {
         const target = e.target;
         if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
@@ -504,7 +583,7 @@ document.addEventListener('click', function (e) {
     });
 
 
-    // ─── Scroll Depth ─────────────────────────────────────────────────────────
+    // Scroll Depth 
     let maxScroll = 0;
     window.addEventListener('scroll', function () {
         const scrolled = Math.round(
@@ -529,7 +608,7 @@ document.addEventListener('click', function (e) {
     });
 
 
-    // ─── Public API ───────────────────────────────────────────────────────────
+    // ─── Public API 
     window.vnow = {
         track(eventName, props = {}) { push('custom', { eventName, ...props }); },
         identify(userId, traits = {}) {
