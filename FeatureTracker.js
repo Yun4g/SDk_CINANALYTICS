@@ -158,17 +158,18 @@
     // Replace your current captureLocation() with this:
 async function captureLocation() {
     try {
-  
-        const ipRes = await fetch('http://ip-api.com/json');
+
+
+          const ipRes = await fetch('https://ipapi.co/json');
         const ipData = await ipRes.json();
 
-        if (ipData.status === 'success') {
+        if (ipData.city) {
             push('location', {
-                country: ipData.country,
-                country_code: ipData.countryCode,
+                country: ipData.country_name,
+                country_code: ipData.country_code,
                 city: ipData.city,
-                region: ipData.regionName,
-                isp: ipData.isp,
+                region: ipData.region,
+                isp: ipData.org,
                 source: 'ip',
             });
         }
