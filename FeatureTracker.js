@@ -346,6 +346,35 @@ async function captureLocation() {
 
 
     // 
+    function getMeaningfulText(el) {
+        const label = getA11yLabel(el);
+        if (label) return label;
+
+        const text = el.textContent?.trim()
+            .replace(/[ --	-]/g, '')
+            .replace(/[ -]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 100);
+        if (text) return text;
+
+        const title = el.getAttribute('title');
+        if (title) return title;
+
+        const dataLabel = el.getAttribute('data-track') || el.getAttribute('data-feature');
+        if (dataLabel) return dataLabel;
+
+        if (el.tagName.toLowerCase() === 'button') {
+            const svg = el.querySelector('svg');
+            if (svg) return 'button click';
+            return 'button click';
+        }
+
+        if (el.tagName.toLowerCase() === 'a') return 'link click';
+
+        return null;
+    }
+
     function resolveFeatureName(el, context) {
         const handlerName = getRingHandlerName(el);
 
@@ -354,7 +383,7 @@ async function captureLocation() {
         if (context.aria_label) return context.aria_label;
 
         // Priority 2: visible text + handler
-        const text = context.inner_text
+        const text = context.inner_text;
         if (text && handlerName) return `${text} – ${handlerName}`;
         if (text) return text;
 
@@ -475,6 +504,10 @@ async function captureLocation() {
             .trim();
     }
 
+    function isNavigationFnString(fnStr) {
+        return /(?:navigate|window\.location|document\.location|location\.href|location\.pathname|location\.assign|location\.replace|router\.(?:push|replace|go)|history\.(?:push|replace)|useNavigate|\$router\.(?:push|replace|go)|this\.router\.navigate)\b/.test(fnStr);
+    }
+
     function isNavigationClick(el) {
 
   
@@ -498,18 +531,7 @@ async function captureLocation() {
             const props = fiber.memoizedProps || fiber.pendingProps;
             if (props?.onClick && typeof props.onClick === 'function') {
                 const fnStr = props.onClick.toString();
-                // Check if the function body contains navigation calls
-                if (
-                    /navigate\s*\(/.test(fnStr) ||        // React Router navigate()
-                    /router\.push\s*\(/.test(fnStr) ||    // Next.js router.push()
-                    /router\.replace\s*\(/.test(fnStr) || // Next.js router.replace()
-                    /history\.push\s*\(/.test(fnStr) ||   // React Router v5
-                    /history\.replace\s*\(/.test(fnStr) ||
-                    /useNavigate/.test(fnStr) ||
-                    /\$router\.push/.test(fnStr) ||        // Vue Router
-                    /\$router\.replace/.test(fnStr) ||
-                    /this\.router\.navigate/.test(fnStr)   // Angular Router
-                ) return true;
+                if (isNavigationFnString(fnStr)) return true;
             }
             fiber = fiber.return;
         }
@@ -522,8 +544,7 @@ async function captureLocation() {
         const handler = vnodeProps.onClick;
         if (typeof handler === 'function') {
             const fnStr = handler.toString();
-            if (/\$router\.(push|replace|go)/.test(fnStr) ||
-                /router\.(push|replace|go)/.test(fnStr)) return true;
+            if (isNavigationFnString(fnStr)) return true;
         }
     }
 
