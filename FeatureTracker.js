@@ -460,26 +460,35 @@ async function captureLocation() {
 
 
     // ─── Click Tracking 
-    document.addEventListener('click', function (e) {
-        const el = e.target.closest('[data-track], button, a, [role="button"]');
-        if (!el) return;
+document.addEventListener('click', function (e) {
 
 
-        const context = getElementContext(el);
+    const el = e.target.closest(
+        '[data-track],' +          
+        'button,' +                
+        '[role="button"],' +      
+        'input[type="button"],' +  
+        'input[type="submit"]'    
+     
+    );
 
+    if (!el) return;
 
-        const feature_name = resolveFeatureName(el, context);
+  
+    const href = el.getAttribute('href') || el.closest('a')?.getAttribute('href');
+    if (href && !href.startsWith('#') && !href.startsWith('javascript')) return;
 
+    const context = getElementContext(el);
+    const feature_name = resolveFeatureName(el, context);
 
-        if (!feature_name && !context.feature_key) return;
+    if (!feature_name && !context.feature_key) return;
 
+    push('feature_click', {
+        ...context,
+        feature_name,
+    });
 
-        push('feature_click', {
-            ...context,
-            feature_name,
-        });
-
-    }, true);
+}, true);
 
 
     // ─── Input Tracking 
