@@ -5,7 +5,8 @@
     const project_key = script?.getAttribute('data-proj-key');
     const customEndpoint = script?.getAttribute('data-endpoint');
 
-    const ENDPOINT = customEndpoint || 'https://cinanalytics-backend.onrender.com/api';
+    const ENDPOINT = customEndpoint || 'https://cinanalytics-backend-10qi.onrender.com/api';
+
     const HEARTBEAT_INTERVAL = 30000;
     const FLUSH_INTERVAL = 5000;
     const MAX_QUEUE = 20;
@@ -159,6 +160,8 @@
 async function captureLocation() {
     try {
 
+
+        
 
           const ipRes = await fetch('https://ipapi.co/json');
         const ipData = await ipRes.json();
