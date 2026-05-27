@@ -404,7 +404,7 @@ async function captureLocation() {
         if (handlerName) return handlerName;
 
         // Priority 4: data attributes
-        const dataLabel = el.getAttribute('data-track') || el.getAttribute('data-feature');
+        const dataLabel = el.getAttribute('data-track') || el.getAttribute('data-feature') || el.getAttribute('data-project-key');
         if (dataLabel) return dataLabel;
 
         return null;
@@ -518,13 +518,108 @@ async function captureLocation() {
     }
 
     function isNavigationFnString(fnStr) {
-        return /(?:navigate|window\.location|document\.location|location\.href|location\.pathname|location\.assign|location\.replace|router\.(?:push|replace|go)|history\.(?:push|replace)|useNavigate|\$router\.(?:push|replace|go)|this\.router\.navigate)\b/.test(fnStr);
+        return /(?:navigate|window\.location|document\.location|location\.href|location\.pathname|location\.assign|location\.replace|router\.(?:push|replace|go)|history\.(?:push|replace)|useNavigate|\$router\.(?:push|replace|go)|this\.router\.navigate)\b/.test(fnStr);
     }
 
     function isNavigationClick(el) {
 
   
     const href = el.getAttribute('href');
+  
+    const __listenerStore = new WeakMap();
+
+    const __origAddEventListener = EventTarget.prototype.addEventListener;
+    EventTarget.prototype.addEventListener = function (type, handler, options) {
+        try {
+            if (typeof handler === 'function') {
+                const existing = __listenerStore.get(this) || [];
+                existing.push({ type, handler, name: handler.name || null, src: handler.toString() });
+                __listenerStore.set(this, existing);
+            }
+        } catch (e) { }
+        return __origAddEventListener.call(this, type, handler, options);
+    };
+
+    const __origRemoveEventListener = EventTarget.prototype.removeEventListener;
+    EventTarget.prototype.removeEventListener = function (type, handler, options) {
+        try {
+            const existing = __listenerStore.get(this);
+            if (existing && handler) {
+                for (let i = existing.length - 1; i >= 0; i--) {
+                    if (existing[i].handler === handler && existing[i].type === type) existing.splice(i, 1);
+                }
+                if (existing.length) __listenerStore.set(this, existing);
+                else __listenerStore.delete(this);
+            }
+        } catch (e) { }
+        return __origRemoveEventListener.call(this, type, handler, options);
+    };
+
+    // Patch jQuery `.on` to record delegated handlers (if jQuery present)
+    try {
+        if (window.jQuery) {
+            const _$on = jQuery.fn.on;
+            jQuery.fn.on = function (...args) {
+                try {
+                    // event type usually first arg (string) and handler last
+                    const types = typeof args[0] === 'string' ? args[0].split(/\s+/) : [];
+                    const handler = args[args.length - 1];
+                    if (typeof handler === 'function') {
+                        this.each(function () {
+                            const existing = __listenerStore.get(this) || [];
+                            types.forEach(t => existing.push({ type: t, handler, name: handler.name || null, src: handler.toString() }));
+                            __listenerStore.set(this, existing);
+                        });
+                    }
+                } catch (e) { }
+                return _$.apply(this, args);
+            };
+        }
+    } catch (e) { }
+
+    // MutationObserver to auto-tag dynamically added interactive elements with a data-track if missing
+    try {
+        const mo = new MutationObserver(muts => {
+            for (const m of muts) {
+                for (const node of m.addedNodes) {
+                    if (!(node instanceof HTMLElement)) continue;
+                    // find interactive elements inside the added subtree
+                    const interactive = node.matches && node.matches('[data-track], button, [role="button"], input[type="button"], input[type="submit"]') ? [node] : Array.from(node.querySelectorAll('[data-track], button, [role="button"], input[type="button"], input[type="submit"]'));
+                    interactive.forEach(el => {
+                        if (!el.getAttribute('data-track') && !el.getAttribute('data-feature')) {
+                            const label = getMeaningfulText(el) || getA11yLabel(el) || el.id || el.getAttribute('name');
+                            if (label) el.setAttribute('data-track', label.slice(0, 100));
+                        }
+                    });
+                }
+            }
+        });
+        mo.observe(document.documentElement || document.body, { childList: true, subtree: true });
+    } catch (e) { }
+
+    function findRecordedHandlerName(el) {
+        try {
+            let node = el;
+            while (node) {
+                const rec = __listenerStore.get(node);
+                if (rec) {
+                    const click = rec.find(r => /click|mousedown|pointerdown/.test(r.type));
+                    if (click) {
+                        if (click.name) return camelToWords(click.name);
+                        // try to infer from source
+                        const m = click.src && click.src.match(/function\s+([a-zA-Z0-9_$]+)/);
+                        if (m) return camelToWords(m[1]);
+                        const arrow = click.src && click.src.slice(0, 200).match(/([a-zA-Z0-9_$]+)\s*=>/);
+                        if (arrow) return camelToWords(arrow[1]);
+                        return 'click handler';
+                    }
+                }
+                node = node.parentElement;
+            }
+        } catch (e) { }
+        return null;
+    }
+
     if (href && !href.startsWith('#') && !href.startsWith('javascript')) return true;
 
   
@@ -590,7 +685,9 @@ document.addEventListener('click', function (e) {
         if (location.href !== urlBefore) return;
 
         const context = getElementContext(el);
-        const feature_name = getMeaningfulText(el) || resolveFeatureName(el, context);
+        // Try visible/a11y text first, then framework-extracted name, then any recorded handler name
+        const recordedHandler = findRecordedHandlerName(el);
+        const feature_name = getMeaningfulText(el) || resolveFeatureName(el, context) || recordedHandler;
 
         if (!feature_name && !context.feature_key) return;
 
