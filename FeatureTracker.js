@@ -41,7 +41,13 @@
         }
     }
 
-    VerifySdk();
+    VerifySdk().then(verified => {
+    if (verified) {
+        captureLocation();
+        push('page_view');
+    }
+});
+
 
     //Session / Visitor ID 
     function uid() {
@@ -211,8 +217,7 @@ async function captureLocation() {
 }
     captureLocation();
 
-    // Page View 
-    push('page_view');
+  
 
     let lastPath = location.pathname;
     const _pushState = history.pushState.bind(history);
@@ -526,6 +531,51 @@ async function captureLocation() {
   
     const href = el.getAttribute('href');
   
+
+    if (href && !href.startsWith('#') && !href.startsWith('javascript')) return true;
+
+  
+    const parentAnchor = el.closest('a');
+    if (parentAnchor) {
+        const parentHref = parentAnchor.getAttribute('href');
+        if (parentHref && !parentHref.startsWith('#') && !parentHref.startsWith('javascript')) return true;
+    }
+
+
+    const fiberKey = Object.keys(el).find(k =>
+        k.startsWith('__reactFiber') || k.startsWith('__reactInternalInstance')
+    );
+    if (fiberKey) {
+        let fiber = el[fiberKey];
+        while (fiber) {
+            const props = fiber.memoizedProps || fiber.pendingProps;
+            if (props?.onClick && typeof props.onClick === 'function') {
+                const fnStr = props.onClick.toString();
+                if (isNavigationFnString(fnStr)) return true;
+            }
+            fiber = fiber.return;
+        }
+    }
+
+  
+    const vue = el.__vueParentComponent;
+    if (vue) {
+        const vnodeProps = vue.vnode?.props || {};
+        const handler = vnodeProps.onClick;
+        if (typeof handler === 'function') {
+            const fnStr = handler.toString();
+            if (isNavigationFnString(fnStr)) return true;
+        }
+    }
+
+    if (el.getAttribute('data-navigate') || el.getAttribute('data-route')) return true;
+
+    return false;
+}
+    //  Click Tracking 
+
+    // --- Instrumentation: record added event listeners and tag dynamic elements ---
+    // Store listeners so we can identify attached handlers later (works when functions are added via addEventListener or jQuery.on)
     const __listenerStore = new WeakMap();
 
     const __origAddEventListener = EventTarget.prototype.addEventListener;
@@ -572,7 +622,7 @@ async function captureLocation() {
                         });
                     }
                 } catch (e) { }
-                return _$.apply(this, args);
+                return _$on.apply(this, args);
             };
         }
     } catch (e) { }
@@ -620,48 +670,7 @@ async function captureLocation() {
         return null;
     }
 
-    if (href && !href.startsWith('#') && !href.startsWith('javascript')) return true;
-
-  
-    const parentAnchor = el.closest('a');
-    if (parentAnchor) {
-        const parentHref = parentAnchor.getAttribute('href');
-        if (parentHref && !parentHref.startsWith('#') && !parentHref.startsWith('javascript')) return true;
-    }
-
-
-    const fiberKey = Object.keys(el).find(k =>
-        k.startsWith('__reactFiber') || k.startsWith('__reactInternalInstance')
-    );
-    if (fiberKey) {
-        let fiber = el[fiberKey];
-        while (fiber) {
-            const props = fiber.memoizedProps || fiber.pendingProps;
-            if (props?.onClick && typeof props.onClick === 'function') {
-                const fnStr = props.onClick.toString();
-                if (isNavigationFnString(fnStr)) return true;
-            }
-            fiber = fiber.return;
-        }
-    }
-
-  
-    const vue = el.__vueParentComponent;
-    if (vue) {
-        const vnodeProps = vue.vnode?.props || {};
-        const handler = vnodeProps.onClick;
-        if (typeof handler === 'function') {
-            const fnStr = handler.toString();
-            if (isNavigationFnString(fnStr)) return true;
-        }
-    }
-
-    if (el.getAttribute('data-navigate') || el.getAttribute('data-route')) return true;
-
-    return false;
-}
-    //  Click Tracking 
-document.addEventListener('click', function (e) {
+    document.addEventListener('click', function (e) {
 
     //  Always find the real interactive element 
     // Click target might be svg, path, img, span insde a button
