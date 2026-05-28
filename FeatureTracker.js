@@ -42,11 +42,11 @@
     }
 
     VerifySdk().then(verified => {
-    if (verified) {
-        captureLocation();
-        push('page_view');
-    }
-});
+        if (verified) {
+            captureLocation();
+            push('page_view');
+        }
+    });
 
 
     //Session / Visitor ID 
@@ -60,7 +60,7 @@
     let visitorId = localStorage.getItem('_vnow_vid');
     if (!visitorId) { visitorId = uid(); localStorage.setItem('_vnow_vid', visitorId); }
 
-  
+
     const sessionId = sessionStorage.getItem('_vnow_sid') || uid();
 
     sessionStorage.setItem('_vnow_sid', sessionId);
@@ -125,8 +125,8 @@
 
     function push(type, data = {}) {
         const event = {
-            project_key,                   
-            visitor_id: visitorId,         
+            project_key,
+            visitor_id: visitorId,
             session_id: sessionId, type,
             url: location.href,
             path: location.pathname,
@@ -163,77 +163,101 @@
 
     //  Geolocation 
     // Replace your current captureLocation() with this:
-async function captureLocation() {
-    try {
+    async function captureLocation() {
+        try {
 
 
-        
 
-          const ipRes = await fetch('https://ipapi.co/json');
-        const ipData = await ipRes.json();
 
-        if (ipData.city) {
-            push('location', {
-                country: ipData.country_name,
-                country_code: ipData.country_code,
-                city: ipData.city,
-                region: ipData.region,
-                isp: ipData.org,
-                source: 'ip',
-            });
-        }
+            const ipRes = await fetch('https://ipapi.co/json');
+            const ipData = await ipRes.json();
 
-        
-        if (!nav.geolocation) return;
-        nav.geolocation.getCurrentPosition(
-            async (pos) => {
-                const lat = pos.coords.latitude;
-                const lng = pos.coords.longitude;
-
-              
-                const geoRes = await fetch(
-                    `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`
-                );
-                const geoData = await geoRes.json();
-
+            if (ipData.city) {
                 push('location', {
-                    lat,
-                    lng,
-                    accuracy: pos.coords.accuracy,
-                    country: geoData.countryName,
-                    country_code: geoData.countryCode,
-                    city: geoData.city,
-                    region: geoData.principalSubdivision,
-                    source: 'gps',
+                    country: ipData.country_name,
+                    country_code: ipData.country_code,
+                    city: ipData.city,
+                    region: ipData.region,
+                    isp: ipData.org,
+                    source: 'ip',
                 });
-            },
-            () => { }, // silently fail if user denies GPS
-            { timeout: 5000, maximumAge: 60000 }
-        );
+            }
 
-    } catch (err) {
-        // Location is non-critical — never crash the SDK over it
+
+            if (!nav.geolocation) return;
+            nav.geolocation.getCurrentPosition(
+                async (pos) => {
+                    const lat = pos.coords.latitude;
+                    const lng = pos.coords.longitude;
+
+
+                    const geoRes = await fetch(
+                        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`
+                    );
+                    const geoData = await geoRes.json();
+
+                    push('location', {
+                        lat,
+                        lng,
+                        accuracy: pos.coords.accuracy,
+                        country: geoData.countryName,
+                        country_code: geoData.countryCode,
+                        city: geoData.city,
+                        region: geoData.principalSubdivision,
+                        source: 'gps',
+                    });
+                },
+                () => { }, // silently fail if user denies GPS
+                { timeout: 5000, maximumAge: 60000 }
+            );
+
+        } catch (err) {
+            // Location is non-critical — never crash the SDK over it
+        }
     }
-}
-    captureLocation();
 
-  
+
+
 
     let lastPath = location.pathname;
     const _pushState = history.pushState.bind(history);
     const _replaceState = history.replaceState.bind(history);
 
-    history.pushState = function (...args) {
-        _pushState(...args);
-        if (location.pathname !== lastPath) { lastPath = location.pathname; push('page_view'); }
-    };
-    history.replaceState = function (...args) {
-        _replaceState(...args);
-        if (location.pathname !== lastPath) { lastPath = location.pathname; push('page_view'); }
-    };
-    window.addEventListener('popstate', () => {
-        if (location.pathname !== lastPath) { lastPath = location.pathname; push('page_view'); }
-    });
+
+
+
+
+  history.pushState = function (...args) {
+    _pushState(...args);
+    if (location.pathname !== lastPath && init) { 
+        lastPath = location.pathname;
+        push('page_view');
+    }
+};
+history.replaceState = function (...args) {
+    _replaceState(...args);
+    if (location.pathname !== lastPath && init) { 
+        lastPath = location.pathname;
+        push('page_view');
+    }
+};
+window.addEventListener('popstate', () => {
+    if (location.pathname !== lastPath && init) {
+        lastPath = location.pathname;
+        push('page_view');
+    }
+});
+
+
+
+
+
+
+
+
+
+
+
 
     window.addEventListener('beforeunload', () => {
         push('session_end', { duration: Date.now() - sessionStart });
@@ -357,41 +381,41 @@ async function captureLocation() {
     // 
     function getMeaningfulText(el) {
 
-    const label = getA11yLabel(el);
-    if (label) return label;
+        const label = getA11yLabel(el);
+        if (label) return label;
 
-    const text = el.textContent?.trim()
-        .replace(/[\u{1F300}-\u{1FFFF}]/gu, '')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 100);
-    if (text) return text;
+        const text = el.textContent?.trim()
+            .replace(/[\u{1F300}-\u{1FFFF}]/gu, '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 100);
+        if (text) return text;
 
-  
-    const dataLabel = el.getAttribute('data-track') || el.getAttribute('data-feature');
-    if (dataLabel) return dataLabel;
 
-   
-    if (el.tagName.toLowerCase() === 'button') {
-        const svg = el.querySelector('svg');
-        if (svg) {
-            const svgTitle = svg.querySelector('title')?.textContent?.trim();
-            if (svgTitle) return svgTitle;
+        const dataLabel = el.getAttribute('data-track') || el.getAttribute('data-feature');
+        if (dataLabel) return dataLabel;
 
-            const ariaLabel = svg.getAttribute('aria-label');
-            if (ariaLabel) return ariaLabel;
 
-           
-            const siblingText = el.closest('[class]')?.querySelector('span, p, h1, h2, h3, label')?.textContent?.trim();
-            if (siblingText) return `${siblingText} button`;
+        if (el.tagName.toLowerCase() === 'button') {
+            const svg = el.querySelector('svg');
+            if (svg) {
+                const svgTitle = svg.querySelector('title')?.textContent?.trim();
+                if (svgTitle) return svgTitle;
+
+                const ariaLabel = svg.getAttribute('aria-label');
+                if (ariaLabel) return ariaLabel;
+
+
+                const siblingText = el.closest('[class]')?.querySelector('span, p, h1, h2, h3, label')?.textContent?.trim();
+                if (siblingText) return `${siblingText} button`;
+            }
+            return null;
         }
-        return null; 
+
+        if (el.tagName.toLowerCase() === 'a') return null;
+
+        return null;
     }
-
-    if (el.tagName.toLowerCase() === 'a') return null;
-
-    return null;
-}
 
     function resolveFeatureName(el, context) {
         const handlerName = getRingHandlerName(el);
@@ -435,8 +459,8 @@ async function captureLocation() {
                     if (typeof handler === 'function') {
                         const eventKey = props.onClick ? 'click' :
                             props.onMouseDown ? 'mouse down' :
-                            props.onPointerDown ? 'pointer down' :
-                            'click';
+                                props.onPointerDown ? 'pointer down' :
+                                    'click';
                         const descriptor = getA11yLabel(el) || el.textContent?.trim().slice(0, 100) || el.id || el.tagName.toLowerCase();
                         const cleanDescriptor = descriptor?.replace(/\s+/g, ' ').trim();
 
@@ -528,53 +552,53 @@ async function captureLocation() {
 
     function isNavigationClick(el) {
 
-  
-    const href = el.getAttribute('href');
-  
 
-    if (href && !href.startsWith('#') && !href.startsWith('javascript')) return true;
-
-  
-    const parentAnchor = el.closest('a');
-    if (parentAnchor) {
-        const parentHref = parentAnchor.getAttribute('href');
-        if (parentHref && !parentHref.startsWith('#') && !parentHref.startsWith('javascript')) return true;
-    }
+        const href = el.getAttribute('href');
 
 
-    const fiberKey = Object.keys(el).find(k =>
-        k.startsWith('__reactFiber') || k.startsWith('__reactInternalInstance')
-    );
-    if (fiberKey) {
-        let fiber = el[fiberKey];
-        while (fiber) {
-            const props = fiber.memoizedProps || fiber.pendingProps;
-            if (props?.onClick && typeof props.onClick === 'function') {
-                const fnStr = props.onClick.toString();
+        if (href && !href.startsWith('#') && !href.startsWith('javascript')) return true;
+
+
+        const parentAnchor = el.closest('a');
+        if (parentAnchor) {
+            const parentHref = parentAnchor.getAttribute('href');
+            if (parentHref && !parentHref.startsWith('#') && !parentHref.startsWith('javascript')) return true;
+        }
+
+
+        const fiberKey = Object.keys(el).find(k =>
+            k.startsWith('__reactFiber') || k.startsWith('__reactInternalInstance')
+        );
+        if (fiberKey) {
+            let fiber = el[fiberKey];
+            while (fiber) {
+                const props = fiber.memoizedProps || fiber.pendingProps;
+                if (props?.onClick && typeof props.onClick === 'function') {
+                    const fnStr = props.onClick.toString();
+                    if (isNavigationFnString(fnStr)) return true;
+                }
+                fiber = fiber.return;
+            }
+        }
+
+
+        const vue = el.__vueParentComponent;
+        if (vue) {
+            const vnodeProps = vue.vnode?.props || {};
+            const handler = vnodeProps.onClick;
+            if (typeof handler === 'function') {
+                const fnStr = handler.toString();
                 if (isNavigationFnString(fnStr)) return true;
             }
-            fiber = fiber.return;
         }
+
+        if (el.getAttribute('data-navigate') || el.getAttribute('data-route')) return true;
+
+        return false;
     }
-
-  
-    const vue = el.__vueParentComponent;
-    if (vue) {
-        const vnodeProps = vue.vnode?.props || {};
-        const handler = vnodeProps.onClick;
-        if (typeof handler === 'function') {
-            const fnStr = handler.toString();
-            if (isNavigationFnString(fnStr)) return true;
-        }
-    }
-
-    if (el.getAttribute('data-navigate') || el.getAttribute('data-route')) return true;
-
-    return false;
-}
     //  Click Tracking 
 
-    // --- Instrumentation: record added event listeners and tag dynamic elements ---
+    // --- Instrumentation: record added event listeners and tag dynamic elements 
     // Store listeners so we can identify attached handlers later (works when functions are added via addEventListener or jQuery.on)
     const __listenerStore = new WeakMap();
 
@@ -672,42 +696,42 @@ async function captureLocation() {
 
     document.addEventListener('click', function (e) {
 
-    //  Always find the real interactive element 
-    // Click target might be svg, path, img, span insde a button
-    // closest() walks up the DOM to find the actual button
-    const el = e.target.closest(
-        '[data-track],' +
-        'button,' +
-        '[role="button"],' +
-        'input[type="button"],' +
-        'input[type="submit"]'
-    );
+        //  Always find the real interactive element 
+        // Click target might be svg, path, img, span insde a button
+        // closest() walks up the DOM to find the actual button
+        const el = e.target.closest(
+            '[data-track],' +
+            'button,' +
+            '[role="button"],' +
+            'input[type="button"],' +
+            'input[type="submit"]'
+        );
 
 
-    if (!el) return;
-    if (isNavigationClick(el)) return;
+        if (!el) return;
+        if (isNavigationClick(el)) return;
 
-    const urlBefore = location.href;
+        const urlBefore = location.href;
 
-    setTimeout(() => {
-        // URL changed or navigation click, discard
-        if (location.href !== urlBefore) return;
+        setTimeout(() => {
+            // URL changed or navigation click, discard
+            if (location.href !== urlBefore) return;
 
-        const context = getElementContext(el);
-        // Try visible/a11y text first, then framework-extracted name, then any recorded handler name
-        const recordedHandler = findRecordedHandlerName(el);
-        const feature_name = getMeaningfulText(el) || resolveFeatureName(el, context) || recordedHandler;
+            const context = getElementContext(el);
+            // Try visible/a11y text first, then framework-extracted name, then any recorded handler name
+            const recordedHandler = findRecordedHandlerName(el);
+            const feature_name = getMeaningfulText(el) || resolveFeatureName(el, context) || recordedHandler;
 
-        if (!feature_name && !context.feature_key) return;
+            if (!feature_name && !context.feature_key) return;
 
-        push('feature_click', {
-            ...context,
-            feature_name,
-        });
+            push('feature_click', {
+                ...context,
+                feature_name,
+            });
 
-    }, 150);
+        }, 150);
 
-}, true);
+    }, true);
 
 
     //  Input Tracking 
@@ -740,15 +764,20 @@ async function captureLocation() {
     let engageStart = Date.now();
     let totalEngaged = 0;
     document.addEventListener('visibilitychange', () => {
+
         if (document.visibilityState === 'hidden') {
             totalEngaged += Date.now() - engageStart;
+            push('engagement_time', { duration: totalEngaged }); 
         } else {
-            engageStart = Date.now();
+            engageStart = Date.now(); 
         }
     });
 
 
-    // ─── Public API 
+
+
+
+
     window.vnow = {
         track(eventName, props = {}) { push('custom', { eventName, ...props }); },
         identify(userId, traits = {}) {
