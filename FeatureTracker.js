@@ -44,7 +44,7 @@
     VerifySdk().then(verified => {
         if (verified) {
             captureLocation();
-            push('page_view');
+            push('page_view', { hash: location.hash || null });
         }
     });
 
@@ -220,34 +220,50 @@
 
 
     let lastPath = location.pathname;
+    let lastHash = location.hash;
+
     const _pushState = history.pushState.bind(history);
     const _replaceState = history.replaceState.bind(history);
 
+    history.pushState = function (...args) {
+        _pushState(...args);
+        const pathChanged = location.pathname !== lastPath;
+        const hashChanged = location.hash !== lastHash;
+        if ((pathChanged || hashChanged) && init) {
+            lastPath = location.pathname;
+            lastHash = location.hash;
+            push('page_view', { hash: location.hash || null });
+        }
+    };
+
+    history.replaceState = function (...args) {
+        _replaceState(...args);
+        const pathChanged = location.pathname !== lastPath;
+        const hashChanged = location.hash !== lastHash;
+        if ((pathChanged || hashChanged) && init) {
+            lastPath = location.pathname;
+            lastHash = location.hash;
+            push('page_view', { hash: location.hash || null });
+        }
+    };
+
+    window.addEventListener('popstate', () => {
+        const pathChanged = location.pathname !== lastPath;
+        const hashChanged = location.hash !== lastHash;
+        if ((pathChanged || hashChanged) && init) {
+            lastPath = location.pathname;
+            lastHash = location.hash;
+            push('page_view', { hash: location.hash || null });
+        }
+    });
 
 
-
-
-  history.pushState = function (...args) {
-    _pushState(...args);
-    if (location.pathname !== lastPath && init) { 
-        lastPath = location.pathname;
-        push('page_view');
-    }
-};
-history.replaceState = function (...args) {
-    _replaceState(...args);
-    if (location.pathname !== lastPath && init) { 
-        lastPath = location.pathname;
-        push('page_view');
-    }
-};
-window.addEventListener('popstate', () => {
-    if (location.pathname !== lastPath && init) {
-        lastPath = location.pathname;
-        push('page_view');
-    }
-});
-
+    window.addEventListener('hashchange', () => {
+        if (location.hash !== lastHash && init) {
+            lastHash = location.hash;
+            push('page_view', { hash: location.hash });
+        }
+    });
 
 
 
@@ -767,9 +783,9 @@ window.addEventListener('popstate', () => {
 
         if (document.visibilityState === 'hidden') {
             totalEngaged += Date.now() - engageStart;
-            push('engagement_time', { duration: totalEngaged }); 
+            push('engagement_time', { duration: totalEngaged });
         } else {
-            engageStart = Date.now(); 
+            engageStart = Date.now();
         }
     });
 
