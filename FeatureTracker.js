@@ -130,6 +130,7 @@
             session_id: sessionId, type,
             url: location.href,
             path: location.pathname,
+           page_name: location.pathname,
             title: document.title,
             timestamp: Date.now(),
             ...env,
