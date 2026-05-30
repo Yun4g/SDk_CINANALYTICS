@@ -22,7 +22,7 @@
         return;
     }
     async function VerifySdk() {
-        if (init) return;
+           if (init) return true;
         try {
             const response = await fetch(`${ENDPOINT}/project/verify-project`, {
                 method: "POST",
@@ -41,12 +41,15 @@
         }
     }
 
-    VerifySdk().then(verified => {
-        if (verified) {
-            captureLocation();
-            push('page_view', { hash: location.hash || null });
-        }
-    });
+ VerifySdk().then(verified => {
+    console.log('[SDK] verified:', verified);
+    if (verified) {
+        lastPath = location.pathname; // ← sync current path
+        lastHash = location.hash;
+        captureLocation();
+        push('page_view', { hash: location.hash || null });
+    }
+});
 
 
     //Session / Visitor ID 
