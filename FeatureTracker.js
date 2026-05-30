@@ -130,7 +130,7 @@
             session_id: sessionId, type,
             url: location.href,
             path: location.pathname,
-           page_name: location.pathname,
+            page_name: location.pathname,
             title: document.title,
             timestamp: Date.now(),
             ...env,
@@ -397,10 +397,11 @@
 
     // 
     function getMeaningfulText(el) {
-
+        // 1. aria-label or similar attributes
         const label = getA11yLabel(el);
         if (label) return label;
 
+        // 2. Visible text on the element itself
         const text = el.textContent?.trim()
             .replace(/[\u{1F300}-\u{1FFFF}]/gu, '')
             .replace(/\s+/g, ' ')
@@ -408,25 +409,58 @@
             .slice(0, 100);
         if (text) return text;
 
-
+        // 3. data attributes
         const dataLabel = el.getAttribute('data-track') || el.getAttribute('data-feature');
         if (dataLabel) return dataLabel;
 
+        // 4. Icon-only button — build name from surrounding context
+        if (el.tagName.toLowerCase() === 'button' || el.getAttribute('role') === 'button') {
 
-        if (el.tagName.toLowerCase() === 'button') {
+            // Try SVG title first
             const svg = el.querySelector('svg');
             if (svg) {
                 const svgTitle = svg.querySelector('title')?.textContent?.trim();
                 if (svgTitle) return svgTitle;
+                const svgAriaLabel = svg.getAttribute('aria-label');
+                if (svgAriaLabel) return svgAriaLabel;
+            }
 
-                const ariaLabel = svg.getAttribute('aria-label');
-                if (ariaLabel) return ariaLabel;
+            // Try nearby label or heading in the same container
+            const container = el.closest('li, tr, td, article, section, [class*="card"], [class*="item"], [class*="row"]');
+            if (container) {
+                const nearbyText = container.querySelector('h1, h2, h3, h4, h5, h6, label, [class*="name"], [class*="title"]')
+                    ?.textContent?.trim()
+                    .replace(/\s+/g, ' ')
+                    .slice(0, 60);
+                if (nearbyText) return `${nearbyText} button`;
+            }
 
+            // Try previous sibling text
+            const prevSibling = el.previousElementSibling;
+            if (prevSibling?.textContent?.trim()) {
+                return `${prevSibling.textContent.trim().slice(0, 60)} button`;
+            }
 
-                const siblingText = el.closest('[class]')?.querySelector('span, p, h1, h2, h3, label')?.textContent?.trim();
+            // Try parent's text content excluding this button's text
+            const parentText = el.parentElement?.childNodes;
+            if (parentText) {
+                const siblingText = [...parentText]
+                    .filter(n => n !== el && n.nodeType === Node.TEXT_NODE)
+                    .map(n => n.textContent.trim())
+                    .filter(Boolean)
+                    .join(' ')
+                    .slice(0, 60);
                 if (siblingText) return `${siblingText} button`;
             }
-            return null;
+
+            // Last resort: use class name to infer purpose
+            const classes = el.className?.toString() || '';
+            const meaningfulClass = classes
+                .split(/\s+/)
+                .find(c => !/^(btn|button|icon|svg|w-|h-|p-|m-|flex|grid|bg-|text-|rounded|border|cursor)/.test(c) && c.length > 3);
+            if (meaningfulClass) return meaningfulClass.replace(/[-_]/g, ' ').trim();
+
+            return null; // let resolveFeatureName try
         }
 
         if (el.tagName.toLowerCase() === 'a') return null;
@@ -437,24 +471,29 @@
     function resolveFeatureName(el, context) {
         const handlerName = getRingHandlerName(el);
 
-        // Priority 1: a11y label + handler
-        if (context.aria_label && handlerName) return `${context.aria_label} – ${handlerName}`;
+        // Filter out useless handler names
+        const uselessNames = ['bound pp', 'click handler', 'pp', 'bound '];
+        const cleanHandler = handlerName && !uselessNames.some(n => handlerName.includes(n))
+            ? handlerName
+            : null;
+
+        if (context.aria_label && cleanHandler) return `${context.aria_label} – ${cleanHandler}`;
         if (context.aria_label) return context.aria_label;
 
-        // Priority 2: visible text + handler
         const text = context.inner_text;
-        if (text && handlerName) return `${text} – ${handlerName}`;
+        if (text && cleanHandler) return `${text} – ${cleanHandler}`;
         if (text) return text;
 
-        // Priority 3: handler alone
-        if (handlerName) return handlerName;
+        if (cleanHandler) return cleanHandler;
 
-        // Priority 4: data attributes
         const dataLabel = el.getAttribute('data-track') || el.getAttribute('data-feature') || el.getAttribute('data-project-key');
         if (dataLabel) return dataLabel;
 
         return null;
     }
+
+
+    
 
 
     //  Framework Handler Detection 
