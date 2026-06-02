@@ -22,7 +22,6 @@
         return;
     }
 
-    js
     function getRoutePath() {
         return location.pathname + (location.hash || '');
     }
