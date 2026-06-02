@@ -21,8 +21,13 @@
         console.error('[FeatureTracker] Error: project_key is required. Please add it as a data attribute to the script tag.');
         return;
     }
+
+    js
+    function getRoutePath() {
+        return location.pathname + (location.hash || '');
+    }
     async function VerifySdk() {
-           if (init) return true;
+        if (init) return true;
         try {
             const response = await fetch(`${ENDPOINT}/project/verify-project`, {
                 method: "POST",
@@ -41,15 +46,13 @@
         }
     }
 
- VerifySdk().then(verified => {
-    console.log('[SDK] verified:', verified);
-    if (verified) {
-        lastPath = location.pathname; // ← sync current path
-        lastHash = location.hash;
-        captureLocation();
-        push('page_view', { hash: location.hash || null });
-    }
-});
+    VerifySdk().then(verified => {
+        if (verified) {
+            lastRoute = getRoutePath();
+            captureLocation();
+            push('page_view', { hash: location.hash || null });
+        }
+    });
 
 
     //Session / Visitor ID 
@@ -127,13 +130,14 @@
     let queue = [];
 
     function push(type, data = {}) {
+        const routePath = getRoutePath();
         const event = {
             project_key,
             visitor_id: visitorId,
             session_id: sessionId, type,
             url: location.href,
-            path: location.pathname,
-            page_name: location.pathname,
+            path: routePath,
+            page_name: routePath,
             title: document.title,
             timestamp: Date.now(),
             ...env,
@@ -226,50 +230,51 @@
     let lastPath = location.pathname;
     let lastHash = location.hash;
 
+
     const _pushState = history.pushState.bind(history);
     const _replaceState = history.replaceState.bind(history);
 
+
+
+
+
+
+
+
+
     history.pushState = function (...args) {
         _pushState(...args);
-        const pathChanged = location.pathname !== lastPath;
-        const hashChanged = location.hash !== lastHash;
-        if ((pathChanged || hashChanged) && init) {
-            lastPath = location.pathname;
-            lastHash = location.hash;
+        const route = getRoutePath();
+        if (route !== lastRoute && init) {
+            lastRoute = route;
             push('page_view', { hash: location.hash || null });
         }
     };
 
     history.replaceState = function (...args) {
         _replaceState(...args);
-        const pathChanged = location.pathname !== lastPath;
-        const hashChanged = location.hash !== lastHash;
-        if ((pathChanged || hashChanged) && init) {
-            lastPath = location.pathname;
-            lastHash = location.hash;
+        const route = getRoutePath();
+        if (route !== lastRoute && init) {
+            lastRoute = route;
             push('page_view', { hash: location.hash || null });
         }
     };
 
     window.addEventListener('popstate', () => {
-        const pathChanged = location.pathname !== lastPath;
-        const hashChanged = location.hash !== lastHash;
-        if ((pathChanged || hashChanged) && init) {
-            lastPath = location.pathname;
-            lastHash = location.hash;
+        const route = getRoutePath();
+        if (route !== lastRoute && init) {
+            lastRoute = route;
             push('page_view', { hash: location.hash || null });
         }
     });
 
-
     window.addEventListener('hashchange', () => {
-        if (location.hash !== lastHash && init) {
-            lastHash = location.hash;
-            push('page_view', { hash: location.hash });
+        const route = getRoutePath();
+        if (route !== lastRoute && init) {
+            lastRoute = route;
+            push('page_view', { hash: location.hash || null });
         }
     });
-
-
 
 
 
@@ -367,7 +372,7 @@
     // Separates raw signal (fingerprint, ariaLabel) from resolved display name.
     function getElementContext(el) {
         const fingerprint = getCSSFingerprint(el);
-        const feature_key = getFeatureKey(fingerprint, location.pathname);
+       const feature_key = getFeatureKey(fingerprint, getRoutePath());
         const a11yLabel = getA11yLabel(el);
         const innerText = el.textContent?.trim()
             .replace(/[\u{1F300}-\u{1FFFF}]/gu, '')
@@ -496,7 +501,7 @@
     }
 
 
-    
+
 
 
     //  Framework Handler Detection 
@@ -845,6 +850,7 @@
         },
         flush,
     };
+
 
     console.log('[visitors.now] SDK loaded ✓ project_key:', project_key.slice(0, 8) + '...');
 })();
