@@ -173,9 +173,6 @@
     async function captureLocation() {
         try {
 
-
-
-
             const ipRes = await fetch('https://ipapi.co/json');
             const ipData = await ipRes.json();
 
@@ -228,6 +225,7 @@
 
     let lastPath = location.pathname;
     let lastHash = location.hash;
+    let lastRoute = '';
 
 
     const _pushState = history.pushState.bind(history);
@@ -371,7 +369,7 @@
     // Separates raw signal (fingerprint, ariaLabel) from resolved display name.
     function getElementContext(el) {
         const fingerprint = getCSSFingerprint(el);
-       const feature_key = getFeatureKey(fingerprint, getRoutePath());
+        const feature_key = getFeatureKey(fingerprint, getRoutePath());
         const a11yLabel = getA11yLabel(el);
         const innerText = el.textContent?.trim()
             .replace(/[\u{1F300}-\u{1FFFF}]/gu, '')
@@ -399,6 +397,48 @@
             classes: el.className || null,
             href: el.getAttribute('href') || null,
         };
+    }
+
+
+    function looksLikeUserContent(text) {
+        // Too long = probably user-generated content, not a feature label
+        if (text.length > 40) return true;
+
+        // Matches ANY emoji, symbol, or pictograph using Unicode ranges
+        if (/[\u{1F000}-\u{1FFFF}|\u{2600}-\u{27BF}|\u{2300}-\u{23FF}|\u{2B00}-\u{2BFF}|\u{FE00}-\u{FEFF}|\u{1F900}-\u{1F9FF}|\u{1FA00}-\u{1FA9F}|\u{E000}-\u{F8FF}]/u.test(text)) return true;
+
+        // Email addresses (user profile text leaking in)
+        if (/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(text)) return true;
+
+        // Phone numbers (various formats)
+        if (/(\+?\d[\d\s\-().]{7,}\d)/.test(text)) return true;
+
+        // URLs
+        if (/https?:\/\/|www\./i.test(text)) return true;
+
+        // Looks like a WhatsApp group ID or any numeric ID
+        if (/\d{10,}/.test(text)) return true;
+
+        // Contains line breaks (multi-line = user-written description)
+        if (/[\r\n]/.test(text)) return true;
+
+        // Multiple sentences (user-written bio/description)
+        if ((text.match(/[.!?]/g) || []).length >= 2) return true;
+
+        // Starts with a number (group names like "4 Guys" or "3rd class 2020")
+        // but allow things like "2FA" or "3D" which are real feature names
+        if (/^\d+\s+[a-z]/i.test(text)) return true;
+
+        // All caps and long (usually a group name or announcement)
+        if (text === text.toUpperCase() && text.length > 15 && /[A-Z]/.test(text)) return true;
+
+        // Excessive punctuation or special chars (chat group descriptions)
+        if ((text.match(/[!*_~`|\\]/g) || []).length >= 2) return true;
+
+        // Foreign scripts mixed with latin (usually user names — optional, be careful)
+        // if (/[\u0600-\u06FF\u0900-\u097F\u4E00-\u9FFF]/.test(text)) return true;
+
+        return false;
     }
 
 
@@ -439,12 +479,13 @@
                     ?.textContent?.trim()
                     .replace(/\s+/g, ' ')
                     .slice(0, 60);
-                if (nearbyText) return `${nearbyText} button`;
+                if (nearbyText && !looksLikeUserContent(nearbyText)) return `${nearbyText} button`;
             }
 
             // Try previous sibling text
             const prevSibling = el.previousElementSibling;
-            if (prevSibling?.textContent?.trim()) {
+            const prevText = prevSibling?.textContent?.trim().slice(0, 60);
+            if (prevSibling?.textContent?.trim() && !looksLikeUserContent(prevText)) {
                 return `${prevSibling.textContent.trim().slice(0, 60)} button`;
             }
 
@@ -457,14 +498,16 @@
                     .filter(Boolean)
                     .join(' ')
                     .slice(0, 60);
-                if (siblingText) return `${siblingText} button`;
+                if (siblingText && !looksLikeUserContent(siblingText)) return `${siblingText} button`;
             }
 
             // Last resort: use class name to infer purpose
             const classes = el.className?.toString() || '';
+            // Add these patterns to the blocklist
+            const JUNK_CLASS_PATTERN = /^(btn|button|icon|svg|w-|h-|p-|m-|gap-|flex|grid|bg-|text-|rounded|border|cursor|opacity|absolute|relative|fixed|sticky|inset|z-|overflow|block|inline|hidden|space-|ring-|shadow|transition|duration|ease|translate|rotate|scale|transform|pointer|select|outline|sr-|not-|group|peer|hover|focus|active|disabled|dark|sm:|md:|lg:|xl:|container|max-|min-|aspect|object|from-|to-|via-)/;
             const meaningfulClass = classes
                 .split(/\s+/)
-                .find(c => !/^(btn|button|icon|svg|w-|h-|p-|m-|flex|grid|bg-|text-|rounded|border|cursor)/.test(c) && c.length > 3);
+                .find(c => !JUNK_CLASS_PATTERN.test(c) && c.length > 3);
             if (meaningfulClass) return meaningfulClass.replace(/[-_]/g, ' ').trim();
 
             return null; // let resolveFeatureName try
@@ -659,6 +702,9 @@
 
         return false;
     }
+
+
+
     //  Click Tracking 
 
     // --- Instrumentation: record added event listeners and tag dynamic elements 
@@ -757,6 +803,29 @@
         return null;
     }
 
+
+    function isJunkTarget(el) {
+        const text = el.textContent?.trim() || '';
+
+        // Time picker options (--:-- --, 3:00 PM, etc.)
+        if (/^--:--/.test(text)) return true;
+        if (/^\d{1,2}:\d{2}\s*(AM|PM)$/.test(text)) return true;
+
+        // Loading/transitional states
+        if (/^(saving|loading|submitting|please wait)\.*$/i.test(text)) return true;
+
+        // Pure number or single character (pagination arrows like ›, ‹, page numbers)
+        if (/^[\d›‹<>←→]+$/.test(text)) return true;
+
+        // Option elements inside select dropdowns
+
+        try {
+            if (el.tagName === 'OPTION' || el.closest('select')) return true;
+        } catch (e) { }
+
+        return false;
+    }
+
     document.addEventListener('click', function (e) {
 
         //  Always find the real interactive element 
@@ -773,6 +842,7 @@
 
         if (!el) return;
         if (isNavigationClick(el)) return;
+        if (isJunkTarget(el)) return;
 
         const urlBefore = location.href;
 
